@@ -20,6 +20,22 @@
 </div>
 <hr>
 
+## v2.9.0 (2026-08-25)
+
+### ✨ New Features
+
+- add pytest-embedded-espemu service for esp-emu *(Shubham Patil - 0c1aa94)*
+
+### 🐛 Bug Fixes
+
+- read the redirect log as bytes, not text *(Pavel Sokolov - abb390d)*
+- arduino app check both .ino.merged.bin and .ino.bin *(Fu Hanxi - 4f4d713)*
+
+### 📖 Documentation
+
+- add espemu service to services page and API reference *(Shubham Patil - c0ef895)*
+
+
 ## v2.8.1 (2026-06-16)
 
 ### ✨ New Features
