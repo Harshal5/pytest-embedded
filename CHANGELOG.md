@@ -20,6 +20,13 @@
 </div>
 <hr>
 
+## v2.9.1 (2026-08-26)
+
+### 🐛 Bug Fixes
+
+- incompatible with pytest-ignore-test-results plugin when child cases failed *(Fu Hanxi - 70033b9)*
+
+
 ## v2.9.0 (2026-08-25)
 
 ### ✨ New Features
