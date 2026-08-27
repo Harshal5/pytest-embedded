@@ -20,6 +20,13 @@
 </div>
 <hr>
 
+## v2.9.2 (2026-08-27)
+
+### 🐛 Bug Fixes
+
+- expose target on the emulator duts *(harshal.patil - e50f74d)*
+
+
 ## v2.9.1 (2026-08-26)
 
 ### 🐛 Bug Fixes
