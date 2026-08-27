@@ -8,6 +8,9 @@ from .espemu import EspEmu
 class EspEmuDut(Dut):
     """
     esp-emu dut class
+
+    Attributes:
+        target (str): target chip type, taken from the app
     """
 
     def __init__(
@@ -18,6 +21,11 @@ class EspEmuDut(Dut):
         self.espemu = espemu
 
         super().__init__(**kwargs)
+
+        # `IdfDut` exposes this for serial runs, and test fixtures use it to
+        # select target specific behavior. `EspEmuApp` is an `IdfApp`, so the
+        # target is known here as well; keep it optional for other app classes.
+        self.target: str | None = getattr(self.app, 'target', None)
 
         self._hard_reset_func = self.espemu._hard_reset
 
