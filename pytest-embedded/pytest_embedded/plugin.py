@@ -1349,16 +1349,19 @@ def dut(
 @pytest.fixture
 def unity_tester(dut: t.Union['IdfDut', tuple['IdfDut']]) -> t.Optional['CaseTester']:
     try:
-        from pytest_embedded_idf import CaseTester, IdfDut
+        from pytest_embedded_idf import CaseTester
+        from pytest_embedded_idf.unity_tester import IdfUnityDutMixin
     except ImportError:
         yield None
     else:
-        # all dut instance must be IdfDut to use this fixture
-        for _dut in to_list(dut):
-            if not isinstance(_dut, IdfDut):
-                yield None
-
-        yield CaseTester(to_list(dut))
+        duts = to_list(dut)
+        # `CaseTester` drives the unity test menu, which every dut carrying
+        # `IdfUnityDutMixin` provides: `IdfDut` inherits it, and the dut factory
+        # mixes it into the qemu and esp-emu duts when the idf service is used.
+        if all(isinstance(_dut, IdfUnityDutMixin) for _dut in duts):
+            yield CaseTester(duts)
+        else:
+            yield None
 
 
 ##################

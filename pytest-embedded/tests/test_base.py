@@ -334,20 +334,27 @@ def test_expect(testdir):
 def test_expect_from_timeout(testdir):
     testdir.makepyfile(r"""
         import threading
-        import time
         import pexpect
 
         def test_expect_from_timeout(msg_queue, dut):
+            stop = threading.Event()
+
             def write_bytes():
                 for _ in range(5):
+                    if stop.is_set():
+                        return
                     msg_queue.write('1')
-                    time.sleep(1.5)
+                    stop.wait(1.5)
 
             write_thread = threading.Thread(target=write_bytes, daemon=True)
             write_thread.start()
 
-            res = dut.expect(pexpect.TIMEOUT, timeout=4)
-            assert res == b'111'
+            try:
+                res = dut.expect(pexpect.TIMEOUT, timeout=4)
+                assert res == b'111'
+            finally:
+                stop.set()
+                write_thread.join(timeout=2)
     """)
 
     result = testdir.runpytest('-s')
