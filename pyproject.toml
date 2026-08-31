@@ -1,6 +1,6 @@
 [tool.commitizen]
 name = "czespressif"
-version = "2.9.2"
+version = "2.9.3"
 annotated_tag = true
 
 tag_format = "v$version"

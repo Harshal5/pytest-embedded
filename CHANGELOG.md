@@ -20,6 +20,13 @@
 </div>
 <hr>
 
+## v2.9.3 (2026-08-31)
+
+### 🐛 Bug Fixes
+
+- let the unity_tester fixture accept emulator duts *(harshal.patil - 9054331)*
+
+
 ## v2.9.2 (2026-08-27)
 
 ### 🐛 Bug Fixes
