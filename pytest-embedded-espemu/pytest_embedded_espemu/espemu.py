@@ -82,6 +82,16 @@ class EspEmu(DuplicateStdoutPopen):
             self._create_efuse_image(self.efuse_path)
             logging.debug('The eFuse image will be saved to: %s', self.efuse_path)
             efuse_args = ['--efuse', self.efuse_path]
+        # A chip reset has no in-band form — on hardware it is a DTR/RTS toggle
+        # into EN, and pyserial's `socket://` handler ignores modem control
+        # lines — so it goes over esp-emu's control channel. Older binaries do
+        # not have the flag, and passing an unknown one makes them exit, so ask
+        # first and stay resettable-or-not accordingly.
+        self.control_port: int | None = None
+        control_args = []
+        if self._supports_control_channel(espemu_prog_path):
+            self.control_port = self._free_port()
+            control_args = ['--control-tcp', f'127.0.0.1:{self.control_port}']
 
         cmd = [
             espemu_prog_path,
@@ -90,6 +100,7 @@ class EspEmu(DuplicateStdoutPopen):
             '--firmware',
             image_path,
             *efuse_args,
+            *control_args,
             *shlex.split(espemu_cli_args or ''),
             *shlex.split(espemu_extra_args or ''),
         ]
@@ -122,9 +133,7 @@ class EspEmu(DuplicateStdoutPopen):
         if not self.efuse_path:
             raise ValueError('No eFuse image set. Please use --espemu-efuse-path')
 
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('127.0.0.1', 0))
-            _, available_port = s.getsockname()
+        available_port = self._free_port()
 
         child = subprocess.Popen(
             [
@@ -173,10 +182,42 @@ class EspEmu(DuplicateStdoutPopen):
 
         raise TimeoutError(f'esp-emu did not open its UART socket on port {port} within {timeout}s')
 
+    @staticmethod
+    def _free_port() -> int:
+        """An unused local port for one of the emulator's sockets."""
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('127.0.0.1', 0))
+            return int(s.getsockname()[1])
+
+    @classmethod
+    def _supports_control_channel(cls, prog_path: str) -> bool:
+        """Whether this esp-emu build accepts `--control-tcp`."""
+        try:
+            out = subprocess.run([prog_path, '--help'], capture_output=True, text=True, timeout=15)
+        except (OSError, subprocess.SubprocessError):
+            return False
+        return '--control-tcp' in (out.stdout + out.stderr)
+
+    def control_command(self, command: str, timeout: float = 30) -> str:
+        """Send one command to the emulator's control channel and return its reply."""
+        if self.control_port is None:
+            raise NotImplementedError(
+                'this esp-emu build has no --control-tcp channel; '
+                'a newer emulator is needed for device-state operations'
+            )
+        with socket.create_connection(('127.0.0.1', self.control_port), timeout=timeout) as sock:
+            sock.sendall(f'{command}\n'.encode())
+            with sock.makefile('rb') as reader:
+                reply = reader.readline().decode().strip()
+        if reply.startswith('err:'):
+            raise RuntimeError(f'esp-emu rejected {command!r}: {reply}')
+        return reply
+
     def _hard_reset(self):
         """
-        esp-emu has no reset API. Raising `NotImplementedError` makes
-        `IdfUnityDutMixin` fall back to re-triggering the Unity test menu
-        with a newline instead of resetting the target.
+        Reset the emulated chip, the way a DTR/RTS toggle does on hardware.
+
+        The emulator process keeps running, so the dut's output stream, its
+        expect history and the log all continue across the reset.
         """
-        raise NotImplementedError('esp-emu does not support resetting; relaunch the emulator instead')
+        self.control_command('reset')
