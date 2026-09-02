@@ -13,7 +13,7 @@ from collections import defaultdict
 from pathlib import Path
 
 if t.TYPE_CHECKING:
-    from pytest_embedded_espemu import EspEmu
+    from pytest_embedded_espemu import EspEmu, EspEmuSerial
     from pytest_embedded_idf import LinuxSerial
     from pytest_embedded_idf.dut import IdfDut
     from pytest_embedded_jtag import Gdb, OpenOcd
@@ -181,6 +181,15 @@ def _fixture_classes_and_options_fn(
     mixins: dict[str, list[type]] = defaultdict(list)
     kwargs: dict[str, dict[str, t.Any]] = defaultdict(dict)
 
+    # The emulator and its serial are two fixtures talking over one control
+    # channel, so the port is settled here, before either exists, and each is
+    # handed it.
+    espemu_control_port = None
+    if 'espemu' in _services:
+        from pytest_embedded_espemu import EspEmu
+
+        espemu_control_port = EspEmu.pick_control_port(espemu_prog_path)
+
     for fixture in FIXTURES_SERVICES.keys():
         if fixture == 'app':
             kwargs['app'] = {'app_path': app_path, 'build_dir': build_dir}
@@ -292,6 +301,14 @@ def _fixture_classes_and_options_fn(
                     from pytest_embedded_serial_esp import EspSerial
 
                     classes[fixture] = EspSerial
+            elif 'espemu' in _services:
+                from pytest_embedded_espemu import EspEmuSerial
+
+                classes[fixture] = EspEmuSerial
+                kwargs[fixture] = {
+                    'control_port': espemu_control_port,
+                    'app': None,
+                }
             elif 'serial' in _services or 'jtag' in _services:
                 from pytest_embedded_serial.serial import Serial
 
@@ -369,6 +386,7 @@ def _fixture_classes_and_options_fn(
                     'espemu_cli_args': espemu_cli_args,
                     'espemu_extra_args': espemu_extra_args,
                     'espemu_efuse_path': espemu_efuse_path,
+                    'espemu_control_port': espemu_control_port,
                     'app': None,
                     'meta': _meta,
                 }
@@ -430,6 +448,7 @@ def _fixture_classes_and_options_fn(
                 kwargs[fixture].update(
                     {
                         'espemu': None,
+                        'serial': None,
                     }
                 )
             elif 'qemu' in _services:
@@ -517,7 +536,7 @@ def app_fn(_fixture_classes_and_options: ClassCliOptions) -> App:
     return cls(**_drop_none_kwargs(kwargs))
 
 
-def serial_gn(_fixture_classes_and_options, msg_queue, app) -> t.Union['Serial', 'LinuxSerial'] | None:
+def serial_gn(_fixture_classes_and_options, msg_queue, app) -> t.Union['Serial', 'LinuxSerial'] | 'EspEmuSerial' | None:
     if hasattr(app, 'target') and app.target == 'linux':
         from pytest_embedded_idf import LinuxSerial
 
