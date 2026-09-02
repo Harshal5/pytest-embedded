@@ -31,7 +31,7 @@ class EspEmuDut(Dut):
         # `IdfSerial` is what ESP-IDF tests call for device state — a reset,
         # an erase, an eFuse burn. Give them something that answers, so a test
         # that needs one reports which operation it needed.
-        self.serial = EspEmuSerial(espemu)
+        self.serial = EspEmuSerial(espemu, getattr(self, 'app', None))
 
         self._hard_reset_func = self.espemu._hard_reset
 

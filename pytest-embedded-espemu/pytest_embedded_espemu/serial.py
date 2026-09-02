@@ -2,6 +2,8 @@ import logging
 import typing as t
 
 if t.TYPE_CHECKING:
+    from pytest_embedded_idf.app import IdfApp
+
     from .espemu import EspEmu
 
 
@@ -15,14 +17,16 @@ class EspEmuSerial:
     hardware, and an emulator has no serial port behind it, so the operations
     that are expressible go over esp-emu's control channel instead.
 
-    Only ``hard_reset`` is implemented so far. The rest of ``IdfSerial`` needs
-    the emulator in download mode with its UART on a socket, so esptool can
-    drive it; until then those methods raise, and the test reports what it
-    needed rather than an ``AttributeError`` on a missing attribute.
+    Reset and the flash erase and write operations go over the channel and act
+    on the running machine, so the firmware sees them without a reload. The
+    operations that need esptool itself — ``flash()``, ``bootloader_flash()``
+    and the partition-writing helpers ESP-IDF's esp_tee tests subclass in —
+    still raise, and the test reports the operation it needed.
     """
 
-    def __init__(self, espemu: 'EspEmu') -> None:
+    def __init__(self, espemu: 'EspEmu', app: t.Optional['IdfApp'] = None) -> None:
         self.espemu = espemu
+        self.app = app
 
     @property
     def port(self) -> str:
@@ -35,6 +39,31 @@ class EspEmuSerial:
         """Reset the chip, the way a DTR/RTS toggle does on hardware."""
         logging.debug('hard resetting the emulated chip')
         self.espemu._hard_reset()
+
+    def erase_flash(self) -> None:
+        """Erase the whole flash, as ``esptool erase-flash`` does."""
+        logging.info('erasing the emulated flash')
+        self.espemu.control_command('erase-flash')
+
+    def erase_region(self, offset: int, size: int) -> None:
+        """Erase one flash region, as ``esptool erase-region`` does."""
+        logging.info('erasing %#x bytes of emulated flash at %#x', size, offset)
+        self.espemu.control_command(f'erase-region {offset:#x} {size:#x}')
+
+    def erase_partition(self, partition_name: str) -> None:
+        """Erase one partition, looked up in the app's partition table."""
+        table = getattr(self.app, 'partition_table', None)
+        if not table:
+            raise ValueError('Partition table not parsed.')
+        if partition_name not in table:
+            raise ValueError(f'partition {partition_name} not found in the partition table')
+        entry = table[partition_name]
+        self.erase_region(entry['offset'], entry['size'])
+
+    def write_flash_no_enc(self, offset: int, file_path: str) -> None:
+        """Write one file into flash at ``offset``, without encrypting it."""
+        logging.info('writing %s into emulated flash at %#x', file_path, offset)
+        self.espemu.control_command(f'write-region {offset:#x} {file_path}')
 
     def close(self) -> None:
         """Nothing to close: the control channel is opened per command."""
